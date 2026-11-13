@@ -123,6 +123,43 @@ publishing them. They're also well over GitHub's 100 MB file limit.
 
 ## Status
 
-**Work in progress:** the first full build and the QEMU boot test are still running. The
-package versions, repository keys and package names have been checked against the live
-NVIDIA and Ubuntu repositories. It has not been run on GB300 hardware.
+**Build:** built on 2026-11-13 on a 4-core x86_64 host: an 882 MB ISO. The build itself checks
+every pinned version and repository key, so a successful build means the versions below are
+the ones installed:
+
+| Component | Installed |
+|---|---|
+| Kernel | 6.17.0-1008-nvidia-64k |
+| GPU driver | 580.126.20 |
+| IMEX | 580.126.20 |
+| DOCA-Host | 3.2.1-044413 |
+| MFT | 4.34.1-12 |
+| DCGM | 4.5.0 |
+| nvfwupd | 2.0.8 |
+| nvdebug | 2.0.0 |
+
+**Boot test:** QEMU 8.2 (arm64 `virt`, Neoverse-N2 CPU model, AAVMF UEFI, Secure Boot off),
+with the ISO attached as a USB CD-ROM like iDRAC virtual media:
+- Live boot reached an autologin root shell on the serial console (about 4 minutes under full
+  emulation), with the login banner showing the versions and the DHCP address.
+- `nvidia.ko` 580.126.20 and the DOCA `mlx5_core` 25.10-1.7.1.409 are installed for the ISO
+  kernel (`updates/dkms`).
+- `mst`/`flint`/`mlxconfig`, `dcgmi`, `nvfwupd` and `nvdebug` run.
+- `nvidia-smi` runs and reports no driver. The VM has no GPU, which is also why
+  `nvidia-persistenced` is the only failed unit.
+- systemd-networkd, lldpd and rasdaemon are active.
+- DHCP works on a virtual NIC.
+- SSH host keys are generated per boot, and root SSH login from outside the VM works with a
+  `debug-ssh-password` password.
+- `gb300-collect --quick` writes a bundle.
+
+With QEMU's catch-all `-cpu max` model, one of three boots crashed `systemd` with an
+undefined-instruction trap. That is an emulation quirk; the Neoverse-N2 boots were clean.
+
+**Not yet tested on GB300 hardware:**
+- the GPU driver binding to Blackwell Ultra GPUs;
+- the DOCA drivers on CX8/BF3;
+- `nvdebug` collection against a real BMC;
+- the serial console name (`ttyAMA0` is assumed).
+
+Try it on one tray first.
