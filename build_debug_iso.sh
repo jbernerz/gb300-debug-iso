@@ -20,9 +20,12 @@
 #   SSH_AUTHORIZED_KEYS=          file of public keys allowed to SSH in as root
 #   BUILD_CA_CERT=                extra CA certificate trusted only during the build (e.g. a
 #                                 TLS-inspecting proxy); removed before the image is made
+#   NATIVE_CC=auto                x86_64 hosts: compile kernel modules with the host's matching
+#                                 arm64 cross compiler instead of under emulation (0 = never)
 #
 # Host packages: mmdebstrap squashfs-tools xorriso grub-common mtools dosfstools gpg curl git
-#   plus ubuntu-keyring on Debian hosts and qemu-user-static on x86_64 hosts.
+#   plus ubuntu-keyring on Debian hosts, and on x86_64 hosts qemu-user-static and (for native
+#   kernel-module builds, see NATIVE_CC) gcc-13-aarch64-linux-gnu binutils-aarch64-linux-gnu.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -342,7 +345,10 @@ stage_customize() {
     fi
     in_chroot systemctl enable systemd-networkd.service systemd-resolved.service
     in_chroot systemctl disable systemd-networkd-wait-online.service 2> /dev/null || true
-    in_chroot systemctl mask apt-daily.timer apt-daily-upgrade.timer motd-news.timer > /dev/null 2>&1 || true
+    # casper-md5check would read the whole ISO over virtual media at every boot (and fails
+    # without an md5sum.txt); the ISO's .sha256 covers integrity instead.
+    in_chroot systemctl mask apt-daily.timer apt-daily-upgrade.timer motd-news.timer \
+        casper-md5check.service > /dev/null 2>&1 || true
 
     local dcgm nvdbg
     dcgm=$(pkg_version datacenter-gpu-manager-4-core)

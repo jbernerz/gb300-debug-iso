@@ -72,14 +72,26 @@ removable disk) before rebooting.
 ## Building it
 
 On a Debian or Ubuntu host, as root. An arm64 host (e.g. a Grace system) runs everything
-natively. On x86_64 the arm64 parts run under qemu-user emulation, and the DKMS module builds
-then take much longer.
+natively. On an x86_64 host the arm64 parts run under qemu-user emulation; install the
+Ubuntu arm64 cross compiler too, so the kernel modules are compiled natively (see `NATIVE_CC`).
 
 ```bash
-sudo apt install mmdebstrap squashfs-tools xorriso grub-common mtools dosfstools gpg curl git \
-                 qemu-user-static          # x86_64 hosts only; Debian hosts also need ubuntu-keyring
+sudo apt install mmdebstrap squashfs-tools xorriso grub-common mtools dosfstools gpg curl git
+# x86_64 hosts also:  qemu-user-static gcc-13-aarch64-linux-gnu binutils-aarch64-linux-gnu
+# Debian hosts also:  ubuntu-keyring
 sudo ./build_debug_iso.sh                  # -> gb300-debug-arm64.iso (+ .sha256, .manifest)
 ```
+
+On a 4-core x86_64 host with 15 GB RAM, the build took about 3 hours and produced an 882 MB ISO:
+
+| Stage | Time | |
+|---|---|---|
+| `rootfs` | 32 min | Ubuntu install, all under emulation. |
+| `drivers` | ~45 min | DOCA-OFED and NVIDIA DKMS builds, compiled natively (`NATIVE_CC`). |
+| `nvdebug` | ~55 min | `pip install` under emulation. |
+| `customize`, `image` | ~10 min | |
+
+An arm64 host is much faster throughout.
 
 | Variable | Default | |
 |---|---|---|
@@ -88,9 +100,14 @@ sudo ./build_debug_iso.sh                  # -> gb300-debug-arm64.iso (+ .sha256
 | `WITH_DCGM_DIAG` | `0` | `1` adds `datacenter-gpu-manager-4-cuda13` for `dcgmi diag`. That's about 1.8 GB unpacked, so the ISO gets much larger. |
 | `SSH_AUTHORIZED_KEYS` | none | Public keys allowed to SSH in as root. |
 | `BUILD_CA_CERT` | none | Extra CA trusted during the build only (for a TLS-inspecting proxy). |
+| `NATIVE_CC` | `auto` | x86_64 hosts: compile kernel modules with the host's `gcc-13-aarch64-linux-gnu` / `binutils-aarch64-linux-gnu` when they are the same build as the chroot's compiler (same arm64 output, minutes instead of hours). `0` = always emulate. |
 
 **Stages.** The build runs in stages: `keys rootfs drivers nvdebug customize image`. Pass stage
 names to run or re-run only those, e.g. `sudo ./build_debug_iso.sh image`.
+
+**Build-host kernel doesn't matter.** DKMS and DOCA's configure script ask `uname -r` which
+kernel to build for. During the `drivers` stage the chroot's `uname` reports the ISO kernel, so
+the modules are built for 6.17 whatever kernel the build host runs.
 
 **Updating to a newer baseline.** Edit `versions.env`: kernel, driver, DOCA, DCGM, nvfwupd and
 nvdebug versions, plus the repository key fingerprints.
